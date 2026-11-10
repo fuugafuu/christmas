@@ -7,7 +7,7 @@ const $=(selector,root=document)=>root.querySelector(selector);
 const $$=(selector,root=document)=>Array.from(root.querySelectorAll(selector));
 const state={
   sort:"new",style:"all",page:0,total:0,items:[],hasMore:false,
-  loading:false,submitting:false,reportId:null,lastPostedId:null,
+  loading:false,pendingReload:false,submitting:false,reportId:null,lastPostedId:null,
   wishLights:new Set(),toastTimeout:null,search:""
 };
 try{state.wishLights=new Set(JSON.parse(localStorage.getItem("snowletter-lights")||"[]"))}catch{}
@@ -44,8 +44,8 @@ function readForm(){
   return {
     name:$("#wishName").value.trim(),
     message:$("#wishMessage").value.trim(),
-    style:form.elements.style.value,
-    ornament:form.elements.ornament.value,
+    style:form.querySelector('input[name="style"]:checked')?.value||"cranberry",
+    ornament:form.querySelector('input[name="ornament"]:checked')?.value||"star",
     website:$("#website").value
   };
 }
@@ -134,11 +134,11 @@ function emptyState(message,title="まだメッセージがありません"){
 }
 function renderGrid(){
   const grid=$("#wishGrid"),q=state.search.trim().toLocaleLowerCase();
-  const items=q?state.items.filter(p=>(p.name+" "+p.message).toLocaleLowerCase().includes(q)):state.items;
+  const items=state.items;
   grid.replaceChildren();
   if(!items.length){
     grid.append(emptyState(
-      q?"読み込み済みの中では見つかりませんでした。\n「もっと見る」で続きを読み込めます。":"最初のひとつを、あなたが飾りませんか？",
+      q?"検索する言葉を変えて、もう一度探してみてください。":"最初のひとつを、あなたが飾りませんか？",
       q?"一致するメッセージがありません":"最初の願いを待っています"
     ));
   }else{
@@ -148,7 +148,7 @@ function renderGrid(){
   }
   $("#loadMore").hidden=!state.hasMore;
   const text=state.total?"公開メッセージ "+fmt.format(state.total)+"件":"新しいメッセージを待っています";
-  $("#wallStatus").textContent=q?text+" · 読み込み済み "+fmt.format(items.length)+"件に一致":text;
+  $("#wallStatus").textContent=q?"「"+state.search.trim()+"」の検索結果 "+fmt.format(state.total)+"件":text;
   renderTreeOrnaments();
   const hash=location.hash.match(/^#wish-([a-f0-9-]{36})$/i);
   if(hash&&grid.querySelector("#wish-"+CSS.escape(hash[1]))){
@@ -156,7 +156,7 @@ function renderGrid(){
   }
 }
 async function loadWishes(reset=false){
-  if(state.loading)return;
+  if(state.loading){if(reset)state.pendingReload=true;return}
   state.loading=true;
   if(reset){
     state.page=0;state.items=[];state.hasMore=false;
@@ -167,7 +167,7 @@ async function loadWishes(reset=false){
     $("#loadMore").disabled=true;$("#loadMore").textContent="読み込み中…";
   }
   try{
-    const data=await request("messages",{params:{page:state.page,limit:12,sort:state.sort,style:state.style}});
+    const data=await request("messages",{params:{page:state.page,limit:12,sort:state.sort,style:state.style,q:state.search.trim()}});
     const known=new Set(state.items.map(x=>x.id));
     const more=(data.items||[]).filter(x=>!known.has(x.id));
     state.items=state.page===0?data.items:state.items.concat(more);
@@ -181,6 +181,7 @@ async function loadWishes(reset=false){
     toast(error.message,true);
   }finally{
     state.loading=false;const more=$("#loadMore");more.disabled=false;more.textContent="もっとメッセージを見る ↓";
+    if(state.pendingReload){state.pendingReload=false;void loadWishes(true)}
   }
 }
 async function addLight(wish,button){
@@ -332,7 +333,7 @@ function initEvents(){
   }));
   $("#cardFilter").addEventListener("change",e=>{state.style=e.target.value;loadWishes(true)});
   let searchTimer;
-  $("#wishSearch").addEventListener("input",e=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{state.search=e.target.value;renderGrid()},180)});
+  $("#wishSearch").addEventListener("input",e=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>{state.search=e.target.value.trim().slice(0,60);loadWishes(true)},300)});
   $("#cancelReport").onclick=()=>$("#reportDialog").close();
   $("#submitReport").onclick=submitReport;
   $("#viewMyWish").onclick=()=>{
