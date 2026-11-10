@@ -56,8 +56,19 @@ function translateError(error:any){
   if(msg.includes("invalid_characters"))return ["改行以外の制御文字は使えません。",422];
   if(msg.includes("light_limit"))return ["今日のイルミネーション上限に達しました。",429];
   if(msg.includes("wish_not_found"))return ["メッセージが見つかりません。",404];
+  if(msg.includes("owner_mismatch")||msg.includes("invalid_owner_token"))return ["この投稿の操作権限を確認できませんでした。",403];
   return ["処理に失敗しました。もう一度お試しください。",500];
 }
+
+function validOwnerToken(token:unknown):token is string {
+  return typeof token==="string" && /^[A-Za-z0-9_-]{43,64}$/.test(token);
+}
+async function ownerHash(token:unknown):Promise<string|null> {
+  if(!validOwnerToken(token))return null;
+  const digest=await crypto.subtle.digest("SHA-256",encode.encode(token));
+  return Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,"0")).join("");
+}
+
 function validText(value:unknown,max:number){
   return typeof value==="string" ? value.trim().slice(0,max+1) : "";
 }
@@ -105,12 +116,60 @@ async function postWish(req:Request,body:any){
   if(message.length<2||message.length>280)return failure("メッセージは2〜280文字で入力してください。",422);
   if(!STYLES.has(style)||!ORNAMENTS.has(ornament))return failure("カードのデザインが不正です。",422);
   const ipHash=await fingerprint(req);
-  const {data,error}=await db.rpc("christmas_post_wish",{
-    p_name:name,p_message:message,p_style:style,p_ornament:ornament,p_ip_hash:ipHash
+  const hash=await ownerHash(body.ownerToken);
+  if(!hash)return failure("投稿管理用の情報がありません。",422);
+  const {data,error}=await db.rpc("christmas_post_wish_owned",{
+    p_name:name,p_message:message,p_style:style,p_ornament:ornament,p_ip_hash:ipHash,p_owner_hash:hash
   });
   if(error){const [m,s]=translateError(error);if(s===500)console.error("post",error.message);return failure(m,s)}
   return respond({ok:true,wish:data},201);
 }
+
+async function ownWishes(body:any){
+  const records=Array.isArray(body.posts)?body.posts.slice(0,60):[];
+  if(!records.length)return respond({ok:true,items:[]});
+  const pairs:{id:string,hash:string}[]=[];
+  for(const record of records){
+    const id=cleanId(record?.id);
+    const hash=await ownerHash(record?.ownerToken);
+    if(id&&hash)pairs.push({id,hash});
+  }
+  if(!pairs.length)return respond({ok:true,items:[]});
+  const ids=[...new Set(pairs.map(x=>x.id))];
+  const {data,error}=await db.from("christmas_wishes")
+    .select("id,display_name,message,card_style,ornament,light_count,created_at,edited_at,owner_token_hash")
+    .in("id",ids).eq("is_hidden",false);
+  if(error)return failure("自分の投稿を確認できませんでした。",503);
+  const valid=new Set(pairs.map(x=>x.id+"|"+x.hash));
+  const items=(data||[]).filter(row=>valid.has(row.id+"|"+row.owner_token_hash))
+    .map(row=>({...publicWish(row),editedAt:row.edited_at}));
+  return respond({ok:true,items});
+}
+async function deleteOwnWish(body:any){
+  const id=cleanId(body.id),hash=await ownerHash(body.ownerToken);
+  if(!id||!hash)return failure("投稿の操作情報が正しくありません。",422);
+  const {data,error}=await db.rpc("christmas_delete_own_wish",{p_id:id,p_owner_hash:hash});
+  if(error)return failure("投稿を取り消せませんでした。",503);
+  if(data!==true)return failure("この投稿を取り消す権限がありません。",403);
+  return respond({ok:true,deleted:true});
+}
+async function editOwnWish(body:any){
+  const id=cleanId(body.id),hash=await ownerHash(body.ownerToken);
+  if(!id||!hash)return failure("投稿の操作情報が正しくありません。",422);
+  const name=validText(body.name,24),message=validText(body.message,280);
+  const style=String(body.style||"cranberry"),ornament=String(body.ornament||"star");
+  if(name.length<1||name.length>24||message.length<2||message.length>280)
+    return failure("名前またはメッセージの文字数を確認してください。",422);
+  if(!STYLES.has(style)||!ORNAMENTS.has(ornament))
+    return failure("カードの設定が不正です。",422);
+  const {data,error}=await db.rpc("christmas_edit_own_wish",{
+    p_id:id,p_owner_hash:hash,p_name:name,p_message:message,
+    p_style:style,p_ornament:ornament
+  });
+  if(error){const [message,status]=translateError(error);return failure(message,status)}
+  return respond({ok:true,wish:data});
+}
+
 async function addLight(req:Request,body:any){
   const id=cleanId(body.id);if(!id)return failure("投稿IDが不正です。",422);
   const {data,error}=await db.rpc("christmas_light_wish",{p_wish_id:id,p_ip_hash:await fingerprint(req)});
@@ -154,7 +213,7 @@ Deno.serve(async(req:Request)=>{
   try{
     const url=new URL(req.url),action=url.searchParams.get("action")||"messages";
     if(req.method==="GET"){
-      if(action==="health")return respond({ok:true,service:"christmas-api",version:"1.0.0"});
+      if(action==="health")return respond({ok:true,service:"christmas-api",version:"2.0.0"});
       if(action==="messages")return await listMessages(url);
       if(action==="stats")return await readStats();
       if(action==="admin")return await adminRead(req);
@@ -167,6 +226,9 @@ Deno.serve(async(req:Request)=>{
     try{body=JSON.parse(text||"{}")}catch{return failure("送信形式が正しくありません。",400)}
     if(!body||typeof body!=="object"||Array.isArray(body))return failure("入力内容が正しくありません。",400);
     if(action==="post")return await postWish(req,body);
+    if(action==="mine")return await ownWishes(body);
+    if(action==="delete")return await deleteOwnWish(body);
+    if(action==="edit")return await editOwnWish(body);
     if(action==="light")return await addLight(req,body);
     if(action==="report")return await reportWish(req,body);
     if(action==="moderate")return await adminModerate(req,body);
