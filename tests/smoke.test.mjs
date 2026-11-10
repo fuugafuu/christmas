@@ -34,6 +34,7 @@ test("server API is anonymous but only privileged database code may mutate",()=>
   assert.ok(api.includes('db.rpc("christmas_light_wish"'));
   assert.ok(api.includes('action==="report"'));
   assert.ok(api.includes('action==="moderate"'));
+  assert.ok(api.includes('christmas_search_wishes'),"full-board search RPC missing");
   for(const rule of [
     "alter table public.christmas_wishes enable row level security",
     "alter table public.christmas_lights enable row level security",
