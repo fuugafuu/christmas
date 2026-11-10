@@ -40,7 +40,7 @@ test("wall includes search/reactions/report and safely inserts user text",()=>{
 });
 test("countdown is JST and advent calendar is day-gated",()=>{
  assert.ok(js.includes('timeZone:"Asia/Tokyo"'));
- assert.ok(js.includes('"T00:00:00+09:00"'));
+ assert.ok(js.includes('T00:00:00+09:00'));
  assert.ok(js.includes('n<=ready'));
  assert.ok(root("countdown.html").includes('id="snowToggle"'));
 });
