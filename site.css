@@ -242,3 +242,14 @@ h1{font-size:clamp(34px,4.4vw,57px);letter-spacing:-.06em;font-weight:700}h2{fon
 .card-item .wish-card{background-blend-mode:normal}
 .theme-midnight:after{border-color:#e3cda166}
 .theme-snow .card-heading{color:#6a8b71}
+
+/* Ownership code backup */
+.sr-only{position:absolute!important;width:1px!important;height:1px!important;clip:rect(0,0,0,0)!important;overflow:hidden!important;white-space:nowrap!important}
+.recovery-box{margin:0 0 28px;padding:19px 21px;background:#fff;border:1px solid #dec9a5;border-radius:12px;display:grid;grid-template-columns:1fr 1.1fr;align-items:center;gap:18px}
+.recovery-box strong{display:block;color:#24503c;font-size:13px;margin-bottom:6px}
+.recovery-box p{font-size:11px;color:#798679;margin:0;line-height:1.9}
+.recovery-form{display:flex;gap:8px}
+.recovery-form input{min-width:0;flex:1;border:1px solid #d3d5ca;border-radius:9px;background:#fcfaf3;color:#263e30;padding:11px 12px;font-size:12px}
+.recovery-form .btn{flex:none;min-height:43px}
+@media(max-width:760px){.recovery-box{grid-template-columns:1fr}}
+@media(max-width:540px){.recovery-form{flex-direction:column}}
