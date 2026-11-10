@@ -112,3 +112,26 @@ revoke execute on function public.christmas_post_wish(text,text,text,text,text) 
 revoke execute on function public.christmas_light_wish(uuid,text) from public,anon,authenticated;
 grant execute on function public.christmas_post_wish(text,text,text,text,text) to service_role;
 grant execute on function public.christmas_light_wish(uuid,text) to service_role;
+
+
+create table if not exists public.christmas_reports (
+  wish_id uuid not null references public.christmas_wishes(id) on delete cascade,
+  ip_hash text not null,
+  reason text not null check(reason in ('spam','inappropriate','personal_info','other')),
+  created_at timestamptz not null default now(),
+  primary key(wish_id,ip_hash)
+);
+create index if not exists christmas_reports_recent_idx on public.christmas_reports(created_at desc);
+alter table public.christmas_reports enable row level security;
+revoke all on public.christmas_reports from public,anon,authenticated;
+
+create or replace function public.christmas_board_stats()
+returns jsonb language sql security invoker set search_path='' as $$
+  select jsonb_build_object(
+    'wishes',count(*),
+    'lights',coalesce(sum(light_count),0),
+    'today',count(*) filter(where created_at>=now()-interval '24 hours')
+  ) from public.christmas_wishes where not is_hidden
+$$;
+revoke execute on function public.christmas_board_stats() from public,anon,authenticated;
+grant execute on function public.christmas_board_stats() to service_role;
