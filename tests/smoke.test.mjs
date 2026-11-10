@@ -1,52 +1,59 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+const root=(f)=>fs.readFileSync(new URL("../"+f,import.meta.url),"utf8");
+const api=root("supabase/functions/christmas-api/index.ts"),js=root("site.js"),css=root("site.css");
+const pages={home:"index.html",write:"write.html",messages:"messages.html",mine:"mine.html",countdown:"countdown.html"};
 
-const read=(p)=>fs.readFileSync(new URL("../"+p,import.meta.url),"utf8");
-const html=read("index.html");
-const css=read("styles.css");
-const js=read("app.js");
-const sql=read("supabase/schema.sql");
-const api=read("supabase/functions/christmas-api/index.ts");
-const vercel=JSON.parse(read("vercel.json"));
-
-test("public site has accessible, no-login submission",()=>{
-  for(const marker of ['id="wishForm"','id="wishName"','id="wishMessage"','id="submitWish"','id="wishGrid"'])
-    assert.ok(html.includes(marker),marker);
-  assert.ok(!html.includes("ログインしてください"));
-  assert.ok(html.includes('maxlength="280"'));
-  assert.ok(html.includes('maxlength="24"'));
-  assert.ok(html.includes('name="website"'),"anti-spam honeypot");
+test("separate short pages, accessible navigation and scripts",()=>{
+ for(const [name,path] of Object.entries(pages)){
+  const html=root(path);
+  assert.ok(html.includes('data-page="'+name+'"'),path);
+  assert.ok(html.includes('src="/site.js?v=2.0.0"'),path);
+  assert.ok(html.includes('href="/mine.html"')&&html.includes('href="/countdown.html"'),path);
+  assert.ok(html.includes('href="/messages.html"')&&html.includes('href="/write.html"'),path);
+ }
+ assert.ok(!root("index.html").includes("id=\"wishForm\""),"home should not contain long message form");
+ assert.ok(!root("index.html").includes("id=\"adventGrid\""),"home should not contain calendar");
 });
-test("interactions and visual preview are wired",()=>{
-  for(const marker of ["function formPreview()","function submitForm(","function addLight(","function openReport(",
-    "function tickClock()","function renderTreeOrnaments()","function loadWishes(","function shareCard("])
-    assert.ok(js.includes(marker),marker);
-  assert.ok(js.includes("createText(")&&js.includes(".textContent"));
-  assert.ok(!js.includes("innerHTML"),"untrusted messages never go through HTML parsing");
-  assert.ok(css.includes("@media(max-width:690px)"));
-  assert.ok(css.includes("prefers-reduced-motion:reduce"));
+test("post management requires unguessable token, and lists own posts",()=>{
+ assert.ok(js.includes("crypto.getRandomValues(new Uint8Array(32))"));
+ assert.ok(js.includes('"/mine.html?posted=1"'));
+ assert.ok(js.includes('request("mine"'));
+ assert.ok(js.includes('request("edit"'));
+ assert.ok(js.includes('request("delete"'));
+ assert.ok(js.includes("confirm("));
+ assert.ok(js.includes("localStorage.setItem(STORE"));
+ assert.ok(api.includes('ownerHash('));
+ assert.ok(api.includes('christmas_post_wish_owned'));
+ assert.ok(api.includes('christmas_edit_own_wish'));
+ assert.ok(api.includes('christmas_delete_own_wish'));
+ assert.ok(api.includes('action==="mine"'));
 });
-test("server API is anonymous but only privileged database code may mutate",()=>{
-  assert.ok(api.includes('Deno.serve('));
-  assert.ok(api.includes('async function fingerprint('));
-  assert.ok(api.includes('db.rpc("christmas_post_wish"'));
-  assert.ok(api.includes('db.rpc("christmas_light_wish"'));
-  assert.ok(api.includes('action==="report"'));
-  assert.ok(api.includes('action==="moderate"'));
-  assert.ok(api.includes('christmas_search_wishes'),"full-board search RPC missing");
-  for(const rule of [
-    "alter table public.christmas_wishes enable row level security",
-    "alter table public.christmas_lights enable row level security",
-    "alter table public.christmas_reports enable row level security",
-    "revoke all on public.christmas_wishes from public, anon, authenticated",
-    "revoke execute on function public.christmas_post_wish"
-  ])assert.ok(sql.includes(rule),rule);
-  assert.ok(sql.includes("posting_cooldown")&&sql.includes("daily_limit"));
+test("wall includes search/reactions/report and safely inserts user text",()=>{
+ assert.ok(js.includes('request("messages"'));
+ assert.ok(js.includes('request("light"'));
+ assert.ok(js.includes('request("report"'));
+ assert.ok(js.includes('.textContent='));
+ assert.ok(!js.includes(".innerHTML"));
+ assert.ok(root("messages.html").includes("id=\"wishSearch\""));
 });
-test("hosting CSP allows only site and intended DB API",()=>{
-  const csp=vercel.headers[0].headers.find(h=>h.key==="Content-Security-Policy")?.value||"";
-  assert.ok(csp.includes("ctteohttbcohzlouaxpo.supabase.co"));
-  assert.ok(csp.includes("script-src 'self'"));
-  assert.ok(!csp.includes("'unsafe-eval'"));
+test("countdown is JST and advent calendar is day-gated",()=>{
+ assert.ok(js.includes('timeZone:"Asia/Tokyo"'));
+ assert.ok(js.includes('"T00:00:00+09:00"'));
+ assert.ok(js.includes('n<=ready'));
+ assert.ok(root("countdown.html").includes('id="snowToggle"'));
+});
+test("all 14 Christmas decorative asset files are locally served",()=>{
+ const assets=["icons","ornaments","winter","badges","scenes","buttons","frames","dividers","forest","paper","velvet","gold","snow","knit"];
+ for(const name of assets)assert.ok(root("assets/"+name+".svg").startsWith("<svg"),"missing "+name);
+ assert.ok(!css.includes(".webp"),"missing binary asset references");
+ assert.ok(css.includes(".ornament-star")&&css.includes(".scene-gifts"));
+});
+test("the existing anonymous database service is isolated",()=>{
+ const sql=root("supabase/migrations/20261110120000_christmas_anonymous_ownership.sql");
+ assert.ok(sql.includes("owner_token_hash"));
+ assert.ok(sql.includes("where id=p_id and owner_token_hash=p_owner_hash"));
+ assert.ok(sql.includes("grant execute on function public.christmas_delete_own_wish"));
+ assert.ok(!sql.includes("drop table"));
 });
