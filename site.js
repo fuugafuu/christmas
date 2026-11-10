@@ -47,8 +47,9 @@ function card(w,mode="public"){
  const actions=E("div","card-actions");
  if(mode==="mine"){
    const edit=E("button","text-button","編集");edit.type="button";edit.onclick=()=>openEdit(w);
+   const code=E("button","text-button","管理コード");code.type="button";code.onclick=()=>copyCode(w);
    const del=E("button","text-button danger","取り消す");del.type="button";del.onclick=()=>cancel(w);
-   actions.append(edit,del);
+   actions.append(edit,code,del);
  }else{
    const lit=alreadyLit(w.id);
    const light=E("button","light-button"+(lit?" lit":""),(lit?"★":"☆")+" "+String(w.lights||0));
@@ -193,9 +194,36 @@ async function cancel(w){
  }catch(e){toast(e.message,"error")}
  finally{state.busy=false}
 }
+
+async function copyCode(w){
+ const ownerToken=readOwned().find(x=>x.id===w.id)?.ownerToken;
+ if(!ownerToken)return toast("管理コードが見つかりません。","error");
+ const value="SL2|"+w.id+"|"+ownerToken;
+ try{
+  await navigator.clipboard.writeText(value);
+  toast("管理コードをコピーしました。人には見せないでください。");
+ }catch{
+  window.prompt("この管理コードを安全な場所に控えてください。",value);
+ }
+}
+async function restoreOwn(){
+ const field=$("#recoveryCode"),code=field.value.trim();
+ const parts=code.split("|");
+ if(parts.length!==3||parts[0]!=="SL2"||!/^[a-f\d-]{36}$/i.test(parts[1])||!/^[A-Za-z0-9_-]{43,64}$/.test(parts[2]))
+   return toast("管理コードの形式を確認してください。","error");
+ const b=$("#restorePost");b.disabled=true;
+ try{
+  const result=await request("mine",{body:{posts:[{id:parts[1],ownerToken:parts[2]}]}});
+  if(!result.items.length)throw Error("このコードで管理できる投稿が見つかりません。");
+  saveOwned(result.items[0],parts[2]);field.value="";
+  toast("投稿を読み込みました。");await loadMine();
+ }catch(e){toast(e.message,"error")}finally{b.disabled=false}
+}
+
 function installMine(){
  if(!$("#mineGrid"))return;
  const dialog=$("#editDialog");$("#closeEdit").onclick=()=>dialog.close();
+ $("#restorePost").onclick=restoreOwn;
  $("#editForm").onsubmit=async e=>{
   e.preventDefault();if(state.busy||!state.target)return;
   const v={name:$("#editName").value.trim(),message:$("#editMessage").value.trim(),
