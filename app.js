@@ -29,7 +29,7 @@ async function request(action,{method="GET",params={},body}={}){
   const controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),15000);
   try{
     const r=await fetch(u,{method,mode:"cors",cache:"no-store",
-      headers:{"Content-Type":"application/json"},
+      headers:body?{"Content-Type":"application/json"}:undefined,
       body:body?JSON.stringify(body):undefined,signal:controller.signal});
     const data=await r.json().catch(()=>({}));
     if(!r.ok||!data.ok)throw new Error(data.error||"通信がうまくいきませんでした。");
