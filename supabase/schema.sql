@@ -48,7 +48,7 @@ begin
   end if;
   if char_length(v_name) not between 1 and 24 then raise exception 'name_length'; end if;
   if char_length(v_message) not between 2 and 280 then raise exception 'message_length'; end if;
-  if v_name ~ '[[:cntrl:]]' or v_message ~ '[[:cntrl:]]' then raise exception 'invalid_characters'; end if;
+  if v_name ~ '[[:cntrl:]]' or replace(replace(replace(v_message,E'\n',''), E'\r',''), E'\t','') ~ '[[:cntrl:]]' then raise exception 'invalid_characters'; end if;
   if v_name ~* '(https?://|www\.)' or v_message ~* '(https?://|www\.|[[:alnum:]_]+@[[:alnum:]_]+\.[[:alpha:]]{2,})'
   then raise exception 'links_not_allowed'; end if;
   if p_style not in ('cranberry','fir','snow','midnight') then raise exception 'invalid_style'; end if;
