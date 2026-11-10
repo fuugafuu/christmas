@@ -24,6 +24,10 @@ test("post management requires unguessable token, and lists own posts",()=>{
  assert.ok(js.includes('request("delete"'));
  assert.ok(js.includes("confirm("));
  assert.ok(js.includes("localStorage.setItem(STORE"));
+ assert.ok(js.includes("async function copyCode("));
+ assert.ok(js.includes("async function restoreOwn("));
+ assert.ok(root("mine.html").includes('id="recoveryCode"'));
+ assert.ok(root("mine.html").includes('id="restorePost"'));
  assert.ok(api.includes('ownerHash('));
  assert.ok(api.includes('christmas_post_wish_owned'));
  assert.ok(api.includes('christmas_edit_own_wish'));
