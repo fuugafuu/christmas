@@ -1,10 +1,10 @@
 {
   "name": "snowletter-christmas",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "description": "Anonymous public Christmas message tree",
   "scripts": {
-    "check": "node --check app.js && node --test tests/smoke.test.mjs",
+    "check": "node --check site.js && node --test tests/smoke.test.mjs",
     "test": "npm run check"
   }
 }
