@@ -73,6 +73,14 @@ async function listMessages(url:URL){
   const limit=Math.min(24,Math.max(6,Number.parseInt(url.searchParams.get("limit")||"12")||12));
   const sort=url.searchParams.get("sort")==="popular"?"popular":"new";
   const style=url.searchParams.get("style")||"all";
+  const search=String(url.searchParams.get("q")||"").trim().slice(0,60);
+  if(search){
+    const {data,error}=await db.rpc("christmas_search_wishes",{
+      p_query:search,p_style:style,p_sort:sort,p_page:page,p_limit:limit
+    });
+    if(error){console.error("search",error.message);return failure("検索に失敗しました。",503)}
+    return respond({ok:true,...(data||{items:[],total:0,page,limit,hasMore:false})});
+  }
   let query=db.from("christmas_wishes")
     .select("id,display_name,message,card_style,ornament,light_count,created_at",{count:"exact"})
     .eq("is_hidden",false);
