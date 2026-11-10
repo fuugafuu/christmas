@@ -135,3 +135,46 @@ returns jsonb language sql security invoker set search_path='' as $$
 $$;
 revoke execute on function public.christmas_board_stats() from public,anon,authenticated;
 grant execute on function public.christmas_board_stats() to service_role;
+
+
+-- Search across the entire public message board (not only the first page).
+create or replace function public.christmas_search_wishes(
+  p_query text,p_style text,p_sort text,p_page integer,p_limit integer
+) returns jsonb language plpgsql security invoker set search_path='' as $$
+declare
+  v_query text := left(btrim(coalesce(p_query,'')),60);
+  v_page integer := least(100,greatest(0,coalesce(p_page,0)));
+  v_limit integer := least(24,greatest(6,coalesce(p_limit,12)));
+  v_total integer;
+  v_items jsonb;
+begin
+  select count(*) into v_total
+  from public.christmas_wishes w
+  where not w.is_hidden
+    and (p_style not in ('cranberry','fir','snow','midnight') or w.card_style=p_style)
+    and (w.display_name ilike '%'||v_query||'%' or w.message ilike '%'||v_query||'%');
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'id',r.id,'name',r.display_name,'message',r.message,'style',r.card_style,
+    'ornament',r.ornament,'lights',r.light_count,'createdAt',r.created_at
+  )),'[]'::jsonb) into v_items
+  from (
+    select w.id,w.display_name,w.message,w.card_style,w.ornament,w.light_count,w.created_at
+    from public.christmas_wishes w
+    where not w.is_hidden
+      and (p_style not in ('cranberry','fir','snow','midnight') or w.card_style=p_style)
+      and (w.display_name ilike '%'||v_query||'%' or w.message ilike '%'||v_query||'%')
+    order by
+      case when p_sort='popular' then w.light_count end desc nulls last,
+      w.created_at desc,w.id desc
+    limit v_limit offset (v_page*v_limit)
+  ) r;
+
+  return jsonb_build_object(
+    'items',v_items,'total',v_total,'page',v_page,'limit',v_limit,
+    'hasMore',(v_page+1)*v_limit < v_total
+  );
+end
+$$;
+revoke execute on function public.christmas_search_wishes(text,text,text,integer,integer) from public,anon,authenticated;
+grant execute on function public.christmas_search_wishes(text,text,text,integer,integer) to service_role;
