@@ -9,7 +9,7 @@
 <button type="button" id="menuToggle" class="menu-toggle" aria-label="メニュー" aria-controls="nav" aria-expanded="false">☰</button>
 <nav id="nav" class="main-nav" aria-label="メインナビゲーション"><a href="/" >ホーム</a><a href="/messages.html" >みんなの投稿</a><a href="/write.html" >投稿する</a><a href="/mine.html" aria-current="page">自分の投稿</a><a href="/countdown.html" >カウントダウン</a></nav></div></header>
 <main id="main"><div class="page-head shell"><span class="eyebrow">MY MESSAGES</span><h1>自分の投稿</h1><p>ここから編集・取り消しができます。</p></div>
-<section class="shell mine-section"><div class="privacy-note"><div class="sprite sprite-mine"></div><p>このブラウザに保存された投稿だけを表示します。ログイン不要ですが、ブラウザのデータを消すと投稿を編集・取り消しできなくなります。別の端末からも操作できません。</p></div>
+<section class="shell mine-section"><div class="privacy-note"><div class="sprite sprite-mine"></div><p>このブラウザに保存された投稿だけを表示します。ログイン不要ですが、ブラウザのデータを消すと管理情報も消えます。大事な投稿は「管理コード」を控えてください。管理コードがあれば別の端末でも操作できます。</p></div>
 <div class="recovery-box"><div><strong>別の端末でも投稿を管理する</strong><p>「管理コード」を保存しておくと、ほかの端末でも投稿を編集・取り消しできます。コードは他の人に見せないでください。</p></div><div class="recovery-form"><label for="recoveryCode" class="sr-only">管理コード</label><input id="recoveryCode" type="text" placeholder="管理コードを貼り付け" autocomplete="off"><button type="button" id="restorePost" class="btn ghost">読み込む</button></div></div><div id="mineGrid" class="cards"><p class="loading">読み込み中…</p></div><div class="load-area"><a href="/write.html" class="btn primary">もう1件投稿する ↗</a></div></section>
 <dialog id="editDialog" class="dialog"><button id="closeEdit" class="dialog-close" aria-label="閉じる" type="button">×</button><h2>投稿を編集</h2><form id="editForm" novalidate>
 <label for="editName">名前</label><input id="editName" maxlength="24" required>
